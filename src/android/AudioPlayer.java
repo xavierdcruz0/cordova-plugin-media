@@ -99,12 +99,19 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
 
     // MY HELPER METHODS //
 
+    /**
+     * The method responsible for actually accessing the AudioRecord.read() method, to periodically read off bytes
+     * from the microphone interface (as long as isRecording is true).
+     *
+     * Adapted from a stackoverflow answer by Rahul Baradia at http://stackoverflow.com/a/13487250
+     */
     private void writeAudioDataToFile() {
-        // Write the output audio in byte
-
+        // declare a String to hold the file path to temporarily store the recorded data
         String filePath = tempFile;
+        // declare an array of short integers to act as a buffer of byte-pairs. We need pairs of bytes because we
+        // have chosen 16-bit PCM encoding
         short sData[] = new short[bufferSize];
-
+        // initialize a FileOutputStream object to save a raw stream of bytes as a file
         FileOutputStream os = null;
         try {
             os = new FileOutputStream(filePath);
@@ -113,14 +120,13 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
         }
 
         while (isRecording) {
-            // gets the voice output from microphone to byte format
-
+            // populate the buffer, sData, with byte-pairs from the sound hardware
             recorder.read(sData, 0, bufferSize);
             System.out.println("Short wirting to file" + sData.toString());
             try {
-                // // writes the data to file from buffer
-                // // stores the voice buffer
-                byte bData[] = short2byte(sData);
+                // convert the buffer of byte-pairs into a buffer of SINLGE bytes
+                byte bData[] = shortToByte(sData);
+                // append the buffer of bytes to the output file
                 os.write(bData, 0, bufferSize * bytesPerBufferElement);
             } catch (IOException e) {
                 e.printStackTrace();
@@ -133,8 +139,15 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
         }
     }
 
-    //convert short to byte
-    private byte[] short2byte(short[] sData) {
+    /**
+     * Converts an array of PAIRS of bytes into an array of bytes. e.g. [0000000011111111, 1111111100000000]
+     * will be converted into [00000000, 11111111, 11111111, 00000000].
+     *
+     * From a stackoverflow answer by Rahul Baradia at http://stackoverflow.com/a/13487250
+     * @param sData The array of pairs of bytes to be converted
+     * @return an array of bytes
+     */
+    private byte[] shortToByte(short[] sData) {
         int shortArrsize = sData.length;
         byte[] bytes = new byte[shortArrsize * 2];
         for (int i = 0; i < shortArrsize; i++) {
@@ -146,6 +159,14 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
 
     }
 
+    /**
+     * Converts a raw .PCM file into a .WAV file by adding the appropriate WAVE header
+     *
+     * Adapted from stackoverflow anser by user Robert Rowntree at http://stackoverflow.com/a/27827340
+     * @param rawFile the raw .PCM file (list of bytes)
+     * @param waveFile the File object to save the WAV to
+     * @throws IOException
+     */
     public void rawToWave(final File rawFile, final File waveFile) throws IOException {
 
         byte[] rawData = new byte[(int) rawFile.length()];
@@ -191,26 +212,41 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
             }
         }
     }
-
+    /**
+     * From stackoverflow anser by user Robert Rowntree at http://stackoverflow.com/a/27827340
+     * @param output
+     * @param value
+     * @throws IOException
+     */
     private void writeInt(final DataOutputStream output, final int value) throws IOException {
         output.write(value >> 0);
         output.write(value >> 8);
         output.write(value >> 16);
         output.write(value >> 24);
     }
-
+    /**
+     * From stackoverflow anser by user Robert Rowntree at http://stackoverflow.com/a/27827340
+     * @param output
+     * @param value
+     * @throws IOException
+     */
     private void writeShort(final DataOutputStream output, final short value) throws IOException {
         output.write(value >> 0);
         output.write(value >> 8);
     }
-
+    /**
+     * From stackoverflow anser by user Robert Rowntree at http://stackoverflow.com/a/27827340
+     * @param output
+     * @param value
+     * @throws IOException
+     */
     private void writeString(final DataOutputStream output, final String value) throws IOException {
         for (int i = 0; i < value.length(); i++) {
             output.write(value.charAt(i));
         }
     }
 
-    // END OF MY HELPER METHODS //
+    // END OF HELPER METHODS //
 
     /**
      * Constructor.
@@ -301,10 +337,12 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
      */
     public void moveFile(String file) {
         /* this is a hack to save the file as the specified name */
+        // The raw PCM file
         File f = new File(this.tempFile);
-
+        // create a file to hold the desired WAV output
         File g = new File(this.tempFileWAV);
         try {
+            // convert the PCM to WAV
             rawToWave(f, g);
         } catch (IOException e) {
             e.printStackTrace();
@@ -333,6 +371,7 @@ public class AudioPlayer implements OnCompletionListener, OnPreparedListener, On
                     this.recorder.stop();
                     this.recorder.release();
                     this.recorder = null;
+                    // terminate the thread associated with reading bytes from hardware and writing them to disk
                     this.recordingThread = null;
                     isRecording = false;
                     this.setState(STATE.MEDIA_STOPPED);
